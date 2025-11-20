@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=prasword
+Comment=Local password manager with encryption
+Exec=/home/prax/Documents/prasword/start.sh
+Icon=password-manager
+Categories=Utility;Security;
+Terminal=false
+StartupNotify=true

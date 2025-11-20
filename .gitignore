@@ -1,0 +1,9 @@
+#virtual env
+/venv
+venv/
+
+# database files
+.db
+
+# python cache
+__pycache__/
