@@ -3,7 +3,7 @@
 venv/
 
 # database files
-.db
+*.db
 
 # python cache
 __pycache__/
