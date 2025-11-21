@@ -1,5 +1,3 @@
-# Create README.md
-cat > README.md << 'EOF'
 # Prasword - Password Manager
 
 A secure, local password manager built with Python and PySide6, featuring KeePassXC-like interface with encrypted database storage.
@@ -14,6 +12,9 @@ A secure, local password manager built with Python and PySide6, featuring KeePas
 - 🔄 **Add/Edit/Delete** password entries
 - 📁 **Database Encryption** with master password
 - 🛡️ **Local Storage** - your data never leaves your computer
+- 💾 **Multiple Database Support** - SQLite and PostgreSQL
+- 🔒 **Auto-lock** functionality
+- 📱 **Cross-platform** - Windows, macOS, Linux
 
 ## Installation
 
@@ -22,7 +23,29 @@ A secure, local password manager built with Python and PySide6, featuring KeePas
 - pip (Python package manager)
 
 ### Steps
-1. Clone the repository:
+
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/praxiumx/prasword.git
    cd prasword
+
+# On Windows
+python -m venv venv
+venv\Scripts\activate
+
+# On macOS/Linux
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+python main.py
+
+quick start
+
+# Windows
+start.bat
+
+# Linux
+chmod +x start.sh
+./start.sh
