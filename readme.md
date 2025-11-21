@@ -1,6 +1,6 @@
 # Prasword - Password Manager
 
-A secure, local password manager built with Python and PySide6, featuring KeePassXC-like interface with encrypted database storage.
+A secure, local or self-hosted postgresql password manager built with Python and PySide6, featuring KeePassXC-like interface with encrypted database storage.
 
 ## Features
 
