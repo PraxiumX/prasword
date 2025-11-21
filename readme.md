@@ -43,9 +43,9 @@ python main.py
 
 # Quick start
 
-- Windows
+(Windows)
 start.bat
 
-- Linux
+(Linux)
 chmod +x start.sh
 ./start.sh
