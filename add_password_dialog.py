@@ -1,7 +1,7 @@
 # add_password_dialog.py
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, 
                              QLineEdit, QTextEdit, QComboBox, QPushButton, 
-                             QDialogButtonBox, QGroupBox, QCheckBox)
+                             QDialogButtonBox, QGroupBox, QCheckBox, QMessageBox)
 from PySide6.QtCore import Qt
 
 class AddPasswordDialog(QDialog):
