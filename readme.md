@@ -41,11 +41,11 @@ pip install -r requirements.txt
 
 python main.py
 
-quick start
+# Quick start
 
-# Windows
+- Windows
 start.bat
 
-# Linux
+- Linux
 chmod +x start.sh
 ./start.sh
