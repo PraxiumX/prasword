@@ -4,12 +4,16 @@ import os
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from main_window import MainWindow
+from settings_manager import SettingsManager
 
 def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Prasword - Local")
     app.setApplicationVersion("1.0.0")
+    
+    # Initialize settings manager to create settings file if needed
+    settings_manager = SettingsManager()
     
     # Create and show main window
     window = MainWindow()

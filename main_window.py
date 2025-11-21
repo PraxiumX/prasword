@@ -12,9 +12,11 @@ from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QAction, QIcon, QPixmap, QPainter, QColor, QFont, QKeySequence
 
 # Add the missing imports
-from database_manager import LocalDatabaseManager
+from database_manager import DatabaseManager
 from add_password_dialog import AddPasswordDialog
 from folder_manager_dialog import FolderManagerDialog
+from database_dialog import DatabaseDialog
+from settings_manager import SettingsManager
 
 class PasswordTableWidget(QWidget):
     """KeePassXC-style table for displaying passwords"""
@@ -66,7 +68,7 @@ class PasswordTableWidget(QWidget):
         print(f"Loading {len(passwords)} passwords")  # Debug
         
         for row, pwd in enumerate(passwords):
-            if pwd:  # Check if password data is not None
+            if pwd and 'title' in pwd:  # Check if password data is valid and has title
                 self.password_table.insertRow(row)
                 
                 # Title
@@ -75,11 +77,11 @@ class PasswordTableWidget(QWidget):
                 self.password_table.setItem(row, 0, title_item)
                 
                 # Username
-                username_item = QTableWidgetItem(pwd['username'] or "")
+                username_item = QTableWidgetItem(pwd.get('username', '') or "")
                 self.password_table.setItem(row, 1, username_item)
                 
                 # URL
-                url_item = QTableWidgetItem(pwd['url'] or "")
+                url_item = QTableWidgetItem(pwd.get('url', '') or "")
                 self.password_table.setItem(row, 2, url_item)
                 
                 # Folder
@@ -119,6 +121,7 @@ class PasswordDetailWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
+        self.current_password_data = None
         self.setup_ui()
         
     def setup_ui(self):
@@ -211,58 +214,74 @@ class PasswordDetailWidget(QWidget):
         
     def display_password(self, password_data):
         if not password_data:
-            self.title_label.setText("No entry selected")
-            self.username_value.setText("")
-            self.password_value.setText("")
-            self.url_value.setText("")
-            self.notes_value.setText("")
-            self.folder_value.setText("")
-            self.created_value.setText("")
-            self.modified_value.setText("")
-            self.set_buttons_enabled(False)
+            self.clear_display()
             return
             
-        self.title_label.setText(password_data['title'])
-        self.username_value.setText(password_data['username'] or "N/A")
-        self.password_value.setText("•" * 10)  # Masked password
-        self.url_value.setText(password_data['url'] or "N/A")
-        self.notes_value.setText(password_data['notes'] or "")
-        self.folder_value.setText(password_data.get('folder_name', 'General'))
+        try:
+            self.current_password_data = password_data
+            self.title_label.setText(password_data.get('title', 'Unknown'))
+            self.username_value.setText(password_data.get('username', '') or "N/A")
+            self.password_value.setText("•" * 10)  # Masked password
+            self.url_value.setText(password_data.get('url', '') or "N/A")
+            self.notes_value.setText(password_data.get('notes', '') or "")
+            self.folder_value.setText(password_data.get('folder_name', 'General'))
+            
+            # Format dates - handle both string and datetime objects
+            created = password_data.get('created_at', '')
+            modified = password_data.get('updated_at', '')
+            
+            if hasattr(created, 'strftime'):  # It's a datetime object
+                self.created_value.setText(created.strftime("%Y-%m-%d %H:%M:%S"))
+            else:  # It's a string
+                self.created_value.setText(str(created)[:19] if created else "N/A")
+                
+            if hasattr(modified, 'strftime'):  # It's a datetime object
+                self.modified_value.setText(modified.strftime("%Y-%m-%d %H:%M:%S"))
+            else:  # It's a string
+                self.modified_value.setText(str(modified)[:19] if modified else "N/A")
+            
+            self.set_buttons_enabled(True)
+            
+        except Exception as e:
+            print(f"Error displaying password: {e}")
+            self.clear_display()
         
-        # Format dates
-        created = password_data.get('created_at', '')
-        modified = password_data.get('updated_at', '')
-        self.created_value.setText(created[:19] if created else "N/A")
-        self.modified_value.setText(modified[:19] if modified else "N/A")
-        
-        # Store actual password data for copy functionality
-        self.current_password_data = password_data
-        self.set_buttons_enabled(True)
+    def clear_display(self):
+        self.title_label.setText("No entry selected")
+        self.username_value.setText("")
+        self.password_value.setText("")
+        self.url_value.setText("")
+        self.notes_value.setText("")
+        self.folder_value.setText("")
+        self.created_value.setText("")
+        self.modified_value.setText("")
+        self.current_password_data = None
+        self.set_buttons_enabled(False)
         
     def copy_username(self):
-        if hasattr(self, 'current_password_data') and self.current_password_data.get('username'):
+        if self.current_password_data and self.current_password_data.get('username'):
             clipboard = QApplication.clipboard()
             clipboard.setText(self.current_password_data['username'])
             QMessageBox.information(self, "Copied", "Username copied to clipboard!")
             
     def copy_password(self):
-        if hasattr(self, 'current_password_data') and self.current_password_data.get('password'):
+        if self.current_password_data and self.current_password_data.get('password'):
             clipboard = QApplication.clipboard()
             clipboard.setText(self.current_password_data['password'])
             QMessageBox.information(self, "Copied", "Password copied to clipboard!")
             
     def copy_url(self):
-        if hasattr(self, 'current_password_data') and self.current_password_data.get('url'):
+        if self.current_password_data and self.current_password_data.get('url'):
             clipboard = QApplication.clipboard()
             clipboard.setText(self.current_password_data['url'])
             QMessageBox.information(self, "Copied", "URL copied to clipboard!")
             
     def on_edit_clicked(self):
-        if hasattr(self, 'current_password_data'):
+        if self.current_password_data:
             self.edit_requested.emit(self.current_password_data)
             
     def on_delete_clicked(self):
-        if hasattr(self, 'current_password_data'):
+        if self.current_password_data:
             self.delete_requested.emit(self.current_password_data)
 
 class FoldersTreeWidget(QWidget):
@@ -319,15 +338,16 @@ class FoldersTreeWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.db_manager = LocalDatabaseManager()
-        self.current_folder_id = 1  # Default folder
+        self.db_manager = DatabaseManager()
+        self.settings_manager = SettingsManager()
+        self.current_folder_id = 1
+        self.current_database = None
         self.setup_ui()
         self.setup_menu()
         self.setup_toolbar()
-        self.setup_database()
         
     def setup_ui(self):
-        self.setWindowTitle("prasword - Local")
+        self.setWindowTitle("prasword - No Database")
         self.setGeometry(100, 100, 1400, 800)
         
         # Central widget
@@ -342,7 +362,7 @@ class MainWindow(QMainWindow):
         self.folders_widget.manage_folders_btn.clicked.connect(self.manage_folders)
         
         # Right side - Splitter for password table and details
-        splitter = QSplitter(Qt.Orientation.Vertical)  # Vertical split like KeePassXC
+        splitter = QSplitter(Qt.Orientation.Vertical)
         
         # Password table (top)
         self.password_table_widget = PasswordTableWidget()
@@ -363,7 +383,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter, 3)
         
         # Status bar
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage("No database connected")
         
     def setup_menu(self):
         menubar = self.menuBar()
@@ -373,13 +393,8 @@ class MainWindow(QMainWindow):
         
         new_db_action = QAction("&New Database", self)
         new_db_action.setShortcut(QKeySequence.StandardKey.New)
-        new_db_action.triggered.connect(self.new_database)
+        new_db_action.triggered.connect(self.show_database_dialog)
         file_menu.addAction(new_db_action)
-        
-        open_db_action = QAction("&Open Database", self)
-        open_db_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_db_action.triggered.connect(self.open_database)
-        file_menu.addAction(open_db_action)
         
         file_menu.addSeparator()
         
@@ -395,7 +410,7 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
-        # Entry menu (like KeePassXC)
+        # Entry menu
         entry_menu = menubar.addMenu("&Entry")
         
         add_entry_action = QAction("&Add Entry", self)
@@ -404,13 +419,13 @@ class MainWindow(QMainWindow):
         entry_menu.addAction(add_entry_action)
         
         edit_entry_action = QAction("&Edit Entry", self)
-        edit_entry_action.setShortcut(QKeySequence.StandardKey.Open)
-        edit_entry_action.triggered.connect(self.edit_password)
+        edit_entry_action.setShortcut("Ctrl+E")
+        edit_entry_action.triggered.connect(self.edit_current_password)
         entry_menu.addAction(edit_entry_action)
         
         delete_entry_action = QAction("&Delete Entry", self)
         delete_entry_action.setShortcut(QKeySequence.StandardKey.Delete)
-        delete_entry_action.triggered.connect(self.delete_password)
+        delete_entry_action.triggered.connect(self.delete_current_password)
         entry_menu.addAction(delete_entry_action)
         
         entry_menu.addSeparator()
@@ -424,6 +439,11 @@ class MainWindow(QMainWindow):
         copy_password_action.setShortcut("Ctrl+P")
         copy_password_action.triggered.connect(self.copy_password)
         entry_menu.addAction(copy_password_action)
+        
+        copy_url_action = QAction("Copy &URL", self)
+        copy_url_action.setShortcut("Ctrl+R")
+        copy_url_action.triggered.connect(self.copy_url)
+        entry_menu.addAction(copy_url_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")
@@ -439,48 +459,69 @@ class MainWindow(QMainWindow):
         toolbar.setIconSize(QSize(24, 24))
         self.addToolBar(toolbar)
         
-        # Add actions to toolbar - only keep essential actions
+        # Database actions
+        new_db_action = QAction("New DB", self)
+        new_db_action.triggered.connect(self.show_database_dialog)
+        toolbar.addAction(new_db_action)
+        
+        toolbar.addSeparator()
+        
+        # Password actions
         add_entry_action = QAction("Add Entry", self)
         add_entry_action.triggered.connect(self.add_password)
         toolbar.addAction(add_entry_action)
         
-    def setup_database(self):
-        """Setup database connection on startup"""
-        try:
-            db_path = "passwords.db"
-            master_password = "master123"
-            
-            if not os.path.exists(db_path):
-                success = self.db_manager.create_database(db_path, master_password)
-                if success:
-                    print("Database created successfully")
-                    self.set_database_connected(True)
-                else:
-                    print("Failed to create database")
-                    self.set_database_connected(False)
-            else:
-                success = self.db_manager.connect_database(db_path, master_password)
-                if success:
-                    print("Database connected successfully")
-                    self.set_database_connected(True)
-                else:
-                    print("Failed to connect to database")
-                    self.set_database_connected(False)
-                    
-        except Exception as e:
-            print(f"Database setup error: {e}")
-            QMessageBox.critical(self, "Database Error", f"Failed to setup database: {e}")
-            self.set_database_connected(False)
+    def show_database_dialog(self):
+        """Show database creation/management dialog"""
+        dialog = DatabaseDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            db_config = dialog.get_selected_database()
+            if db_config:
+                self.connect_to_database(db_config)
     
-    # Menu action implementations
-    def new_database(self):
-        QMessageBox.information(self, "Info", "New database feature coming soon")
-        
-    def open_database(self):
-        QMessageBox.information(self, "Info", "Open database feature coming soon")
-        
+    def connect_to_database(self, db_config):
+        """Connect to selected database"""
+        try:
+            print(f"Connecting to database: {db_config['name']} ({db_config['type']})")
+            
+            success = False
+            if db_config['type'] == 'sqlite':
+                success = self.db_manager.connect_sqlite_database(
+                    db_config['path'], 
+                    db_config['master_password']
+                )
+            else:  # postgresql
+                success = self.db_manager.connect_postgresql_database(
+                    db_config['config'],
+                    db_config['master_password']
+                )
+                
+            if success:
+                self.current_database = db_config
+                self.set_database_connected(True)
+                self.setWindowTitle(f"prasword - {db_config['name']} ({db_config['type']})")
+                self.statusBar().showMessage(f"Connected to {db_config['name']}")
+                print("Database connected successfully")
+                
+                # Test if we can actually read data
+                test_folders = self.db_manager.get_folders()
+                print(f"Test: Retrieved {len(test_folders)} folders")
+                
+            else:
+                self.set_database_connected(False)
+                QMessageBox.warning(self, "Error", f"Failed to connect to {db_config['name']}. Check master password.")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Database connection error: {str(e)}")
+    
     def lock_database(self):
-        QMessageBox.information(self, "Info", "Lock database feature coming soon")
+        if self.db_manager.is_connected:
+            self.db_manager.close()
+            self.set_database_connected(False)
+            self.setWindowTitle("prasword - Locked")
+            QMessageBox.information(self, "Database Locked", "Database has been locked. Use 'Database' menu to reconnect.")
+        else:
+            QMessageBox.information(self, "Info", "No database is currently connected.")
         
     def add_password(self):
         if not self.db_manager.is_connected:
@@ -492,15 +533,24 @@ class MainWindow(QMainWindow):
             self.refresh_passwords()
             QMessageBox.information(self, "Success", "Password added successfully!")
     
+    def edit_current_password(self):
+        """Edit currently selected password"""
+        if not self.db_manager.is_connected:
+            QMessageBox.warning(self, "Error", "Database not connected.")
+            return
+            
+        if hasattr(self.password_detail_widget, 'current_password_data') and self.password_detail_widget.current_password_data:
+            self.edit_password(self.password_detail_widget.current_password_data)
+        else:
+            QMessageBox.warning(self, "Error", "No password selected to edit.")
+    
     def edit_password(self, password_data=None):
         """Edit existing password entry"""
         if not self.db_manager.is_connected:
             QMessageBox.warning(self, "Error", "Database not connected.")
             return
             
-        # If no password_data provided, try to get from selection
         if not password_data:
-            # Get selected password from table
             selected_items = self.password_table_widget.password_table.selectedItems()
             if not selected_items:
                 QMessageBox.warning(self, "Error", "No password selected to edit.")
@@ -508,14 +558,24 @@ class MainWindow(QMainWindow):
             row = selected_items[0].row()
             password_data = self.password_table_widget.password_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         
-        if password_data:
-            # Use the same AddPasswordDialog for editing
+        if password_data and 'id' in password_data:
             dialog = AddPasswordDialog(self.db_manager, self, password_data)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 self.refresh_passwords()
                 QMessageBox.information(self, "Success", "Password updated successfully!")
         else:
-            QMessageBox.warning(self, "Error", "No password data available to edit.")
+            QMessageBox.warning(self, "Error", "No valid password data available to edit.")
+    
+    def delete_current_password(self):
+        """Delete currently selected password"""
+        if not self.db_manager.is_connected:
+            QMessageBox.warning(self, "Error", "Database not connected.")
+            return
+            
+        if hasattr(self.password_detail_widget, 'current_password_data') and self.password_detail_widget.current_password_data:
+            self.delete_password(self.password_detail_widget.current_password_data)
+        else:
+            QMessageBox.warning(self, "Error", "No password selected to delete.")
         
     def delete_password(self, password_data=None):
         """Delete password entry"""
@@ -523,7 +583,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Database not connected.")
             return
             
-        # If no password_data provided, try to get from selection
         if not password_data:
             selected_items = self.password_table_widget.password_table.selectedItems()
             if not selected_items:
@@ -532,11 +591,11 @@ class MainWindow(QMainWindow):
             row = selected_items[0].row()
             password_data = self.password_table_widget.password_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         
-        if password_data:
+        if password_data and 'id' in password_data:
             reply = QMessageBox.question(
                 self, 
                 "Confirm Delete", 
-                f"Are you sure you want to delete '{password_data['title']}'?",
+                f"Are you sure you want to delete '{password_data.get('title', 'Unknown')}'?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             
@@ -544,34 +603,49 @@ class MainWindow(QMainWindow):
                 success = self.db_manager.delete_password(password_data['id'])
                 if success:
                     self.refresh_passwords()
-                    self.password_detail_widget.display_password(None)  # Clear details
+                    self.password_detail_widget.display_password(None)
                     QMessageBox.information(self, "Success", "Password deleted successfully!")
                 else:
                     QMessageBox.warning(self, "Error", "Failed to delete password.")
         else:
-            QMessageBox.warning(self, "Error", "No password data available to delete.")
+            QMessageBox.warning(self, "Error", "No valid password data available to delete.")
         
     def copy_username(self):
-        if hasattr(self.password_detail_widget, 'current_password_data'):
+        if hasattr(self.password_detail_widget, 'current_password_data') and self.password_detail_widget.current_password_data:
             self.password_detail_widget.copy_username()
+        else:
+            QMessageBox.warning(self, "Error", "No password selected.")
         
     def copy_password(self):
-        if hasattr(self.password_detail_widget, 'current_password_data'):
+        if hasattr(self.password_detail_widget, 'current_password_data') and self.password_detail_widget.current_password_data:
             self.password_detail_widget.copy_password()
+        else:
+            QMessageBox.warning(self, "Error", "No password selected.")
+    
+    def copy_url(self):
+        if hasattr(self.password_detail_widget, 'current_password_data') and self.password_detail_widget.current_password_data:
+            self.password_detail_widget.copy_url()
+        else:
+            QMessageBox.warning(self, "Error", "No password selected.")
             
     def toggle_details(self, checked):
-        # Show/hide details panel
         if hasattr(self, 'password_detail_widget'):
             self.password_detail_widget.setVisible(checked)
         
     def add_folder_quick(self):
-        # Quick add folder dialog
+        if not self.db_manager.is_connected:
+            QMessageBox.warning(self, "Error", "Database not connected. Cannot add folder.")
+            return
+            
         name, ok = QInputDialog.getText(self, "Add Group", "Group name:")
         if ok and name:
+            # Fix for PostgreSQL "no results to fetch" error
             folder_id = self.db_manager.create_folder(name)
             if folder_id != -1:
                 self.refresh_folders()
                 QMessageBox.information(self, "Success", f"Group '{name}' created!")
+            else:
+                QMessageBox.warning(self, "Error", "Failed to create group")
         
     def manage_folders(self):
         if not self.db_manager.is_connected:
@@ -592,10 +666,10 @@ class MainWindow(QMainWindow):
         
     def on_password_selected(self, password_data):
         if password_data:
+            print(f"Password selected: {password_data.get('title', 'Unknown')}")
             self.password_detail_widget.display_password(password_data)
             
     def on_password_activated(self, password_data):
-        # Double-click action - copy password to clipboard
         if password_data and password_data.get('password'):
             clipboard = QApplication.clipboard()
             clipboard.setText(password_data['password'])
@@ -606,9 +680,9 @@ class MainWindow(QMainWindow):
             return
             
         folders = self.db_manager.get_folders()
+        print(f"Retrieved {len(folders)} folders")
         password_counts = self.db_manager.get_password_count_by_folder()
         
-        # Merge password counts with folders
         for folder in folders:
             if folder:
                 folder['password_count'] = next(
@@ -624,6 +698,12 @@ class MainWindow(QMainWindow):
         print(f"Refreshing passwords for folder: {self.current_folder_id}")
         passwords = self.db_manager.get_passwords(self.current_folder_id)
         print(f"Retrieved {len(passwords)} passwords")
+        
+        # Check if passwords are properly decrypted
+        for pwd in passwords:
+            if pwd and 'title' not in pwd:
+                print(f"Warning: Password missing title: {pwd}")
+        
         self.password_table_widget.load_passwords(passwords)
         
     def set_database_connected(self, connected):
@@ -632,4 +712,7 @@ class MainWindow(QMainWindow):
             self.refresh_passwords()
             self.statusBar().showMessage("Database connected")
         else:
+            self.folders_widget.load_folders([])
+            self.password_table_widget.load_passwords([])
+            self.password_detail_widget.display_password(None)
             self.statusBar().showMessage("No database connected")

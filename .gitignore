@@ -1,5 +1,4 @@
 #virtual env
-/venv
 venv/
 
 # database files
