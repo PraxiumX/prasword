@@ -9,15 +9,19 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# PostgreSQL support - try to import, but make it optional
+# PostgreSQL support - try to import, but make it optional with better error handling
+POSTGRESQL_AVAILABLE = False
+psycopg2 = None
+
 try:
     import psycopg2
     from psycopg2 import sql
     POSTGRESQL_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    # Only show warning if someone actually tries to use PostgreSQL
     psycopg2 = None
     POSTGRESQL_AVAILABLE = False
-    print("PostgreSQL support disabled. Install psycopg2-binary for PostgreSQL support.")
+    # Don't print here - we'll handle it when PostgreSQL is actually attempted
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -278,7 +282,7 @@ class DatabaseManager:
     def create_postgresql_database(self, db_config: dict, master_password: str) -> bool:
         """Create a new encrypted PostgreSQL database"""
         if not POSTGRESQL_AVAILABLE:
-            logging.error("PostgreSQL support not available. Install psycopg2-binary.")
+            logging.warning("PostgreSQL support not available. Install psycopg2-binary for PostgreSQL support.")
             return False
             
         try:
@@ -373,7 +377,7 @@ class DatabaseManager:
     def connect_postgresql_database(self, db_config: dict, master_password: str) -> bool:
         """Connect to an existing PostgreSQL database"""
         if not POSTGRESQL_AVAILABLE:
-            logging.error("PostgreSQL support not available. Install psycopg2-binary.")
+            logging.warning("PostgreSQL support not available. Install psycopg2-binary for PostgreSQL support.")
             return False
             
         try:
@@ -417,6 +421,10 @@ class DatabaseManager:
                 self.conn.close()
                 self.is_connected = False
             return False
+    
+    def is_postgresql_available(self) -> bool:
+        """Check if PostgreSQL support is available"""
+        return POSTGRESQL_AVAILABLE
     
     # Folder Management Methods
     def create_folder(self, name: str, icon_data: bytes = None, color: str = "#3498db") -> int:
